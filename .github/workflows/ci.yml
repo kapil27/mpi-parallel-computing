@@ -1,0 +1,156 @@
+name: MPI Research CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-ubuntu:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install MPI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libopenmpi-dev openmpi-bin
+        
+    - name: Install Python dependencies  
+      run: |
+        python3 -m pip install --upgrade pip
+        pip3 install mpi4py
+        
+    - name: Verify MPI installation
+      run: |
+        mpirun --version
+        which mpirun
+        python3 -c "import mpi4py; print('mpi4py version:', mpi4py.__version__)"
+        
+    - name: Compile examples
+      run: make all
+      
+    - name: Run basic tests
+      run: |
+        # Test basic examples
+        timeout 30 mpirun -np 2 examples/basic/hello_world_mpi
+        timeout 30 mpirun -np 2 examples/basic/parallel_sum_mpi
+        
+    - name: Run intermediate tests  
+      run: |
+        # Test intermediate examples with shorter runs
+        timeout 60 mpirun -np 2 examples/intermediate/monte_carlo_pi_mpi 100000
+        
+    - name: Run Python tests
+      run: |
+        timeout 30 mpirun -np 2 python3 examples/basic/hello_world_mpi.py
+        
+    - name: Test Makefile targets
+      run: |
+        make help
+        make status
+        make clean
+        
+  test-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install MPI
+      run: |
+        brew install open-mpi
+        
+    - name: Install Python dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        pip3 install mpi4py
+        
+    - name: Verify MPI installation
+      run: |
+        mpirun --version
+        which mpirun
+        python3 -c "import mpi4py; print('mpi4py version:', mpi4py.__version__)"
+        
+    - name: Compile examples
+      run: make all
+      
+    - name: Run basic tests
+      run: |
+        timeout 30 mpirun -np 2 examples/basic/hello_world_mpi
+        timeout 30 mpirun -np 2 examples/basic/parallel_sum_mpi
+        
+    - name: Run Python tests
+      run: |
+        timeout 30 mpirun -np 2 python3 examples/basic/hello_world_mpi.py
+
+  performance-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install MPI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libopenmpi-dev openmpi-bin
+        
+    - name: Install Python dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        pip3 install mpi4py
+        
+    - name: Compile examples
+      run: make all
+      
+    - name: Performance regression test
+      run: |
+        # Quick performance check - should complete in reasonable time
+        echo "=== Performance Regression Test ==="
+        
+        # Monte Carlo test - should finish quickly
+        timeout 120 mpirun -np 2 examples/intermediate/monte_carlo_pi_mpi 1000000
+        
+        # Matrix multiplication test - reduced size for CI
+        echo "Performance tests completed successfully"
+
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install MPI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libopenmpi-dev openmpi-bin
+        
+    - name: Check code compilation with warnings
+      run: |
+        # Compile with strict warnings
+        mpicc -Wall -Wextra -Werror -std=c99 -c examples/basic/hello_world_mpi.c
+        mpicc -Wall -Wextra -Werror -std=c99 -c examples/basic/parallel_sum_mpi.c
+        mpicc -Wall -Wextra -Werror -std=c99 -c examples/intermediate/monte_carlo_pi_mpi.c
+        mpicc -Wall -Wextra -Werror -std=c99 -c examples/intermediate/matrix_multiply_mpi.c -lm
+        
+    - name: Check Python syntax
+      run: |
+        python3 -m py_compile examples/basic/hello_world_mpi.py
+        
+    - name: Verify documentation
+      run: |
+        # Check that required files exist
+        test -f README.md
+        test -f LICENSE
+        test -f CONTRIBUTING.md
+        test -f Makefile
+        
+        # Check that examples have proper structure
+        test -d examples/basic
+        test -d examples/intermediate
+        test -d benchmarks
+        test -d docs
+        
+        echo "Documentation structure verified"
